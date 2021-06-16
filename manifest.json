@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "Charset Menu",
   "description": "Restores the charset menu removed in Thunderbird 91",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "Jorg K",
   "applications": {
     "gecko": {
