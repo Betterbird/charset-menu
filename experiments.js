@@ -8,6 +8,7 @@ var { ExtensionParent } = ChromeUtils.import("resource://gre/modules/ExtensionPa
 
 const EXTENSION_NAME = "CharsetMenu@jorgk.com";
 var extension = ExtensionParent.GlobalManager.getExtension(EXTENSION_NAME);
+Cu.importGlobalProperties(["TextEncoder"]); // Don't ask :-(
 
 // Implements the functions defined in the experiments section of schema.json.
 var CharsetMenu = class extends ExtensionCommon.ExtensionAPI {
@@ -51,6 +52,18 @@ function paint(win) {
           ? win.gMessageDisplay.displayedMessage.messageKey
           : null;
       win.messenger.setDocumentCharset(win.msgWindow.mailCharacterSet);
+      win.setTimeout(() => {
+        let subject = win.document.getElementById("expandedsubjectBox").textContent;
+        let subjectUTF8 = String.fromCharCode.apply(undefined, new TextEncoder("UTF-8").encode(subject));
+        const { selectedMessage, tree, selectedMessageUris } = win.gFolderDisplay;
+        console.log(selectedMessage, tree, subject, subjectUTF8);
+        if (selectedMessage) {
+          selectedMessage.subject = subjectUTF8;
+          if (tree && tree.view && tree.view.selection && tree.view.selection.currentIndex >= 0) {
+            tree.invalidateRow(tree.view.selection.currentIndex);
+          }
+        }
+      }, 100);
     }
   };
   win.UpdateCharsetMenuNew = (aCharset, aNode) => {
