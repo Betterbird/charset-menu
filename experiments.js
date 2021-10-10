@@ -54,14 +54,12 @@ function paint(win) {
           ? win.gMessageDisplay.displayedMessage.messageKey
           : null;
       let canSetCharset = false;
-      try {
+      if ("setDocumentCharset" in win.messenger) {
         let charset = aEvent.target.getAttribute("charset");
         // From TB 91.3 or TB 94 beta the following call will fail since the API was removed.
         win.messenger.setDocumentCharset(charset);
         win.msgWindow.mailCharacterSet = charset;
         canSetCharset = true;
-      } catch (ex) {
-        win.messenger.forceDetectDocumentCharset();
       }
 
       // messenger.setDocumentCharset() also fixes the subject in the header pane,
@@ -96,7 +94,7 @@ function paint(win) {
   };
 
   /* eslint-disable max-len */
-  let xul = win.MozXULElement.parseXULToFragment(`
+  let xulSrc = `
     <menu id="charsetMenuNew"
           onpopupshowing="UpdateCharsetMenuNew(msgWindow.mailCharacterSet, this);"
           oncommand="MailSetCharacterSetNew(event);"
@@ -139,8 +137,13 @@ function paint(win) {
     <menuitem type="radio" charset="windows-1258" label="Vietnamese (windows-1258)"></menuitem>
     </menupopup>
     </menu>
-  `);
+  `;
+  if ("forceDetectDocumentCharset" in win.messenger) {
+    // eslint-disable-next-line quotes
+    xulSrc = xulSrc.replace(/type="radio"/g, 'type="radio" disabled="true"');
+  }
   /* eslint-enable max-len */
+  let xul = win.MozXULElement.parseXULToFragment(xulSrc);
   let old = win.document.getElementById("charsetMenu");
   if (!old) old = win.document.getElementById("repair-text-encoding");  // TB 91 item.
   old.parentNode.insertBefore(xul, old.nextSibling);
