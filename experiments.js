@@ -29,6 +29,9 @@ var CharsetMenu = class extends ExtensionCommon.ExtensionAPI {
     return {
       CharsetMenu: {
         addWindowListener(dummy) {
+          let defaultsBranch = Services.prefs.getDefaultBranch("extensions.CharsetMenu.");
+          defaultsBranch.setBoolPref("fixThreadTree", false);
+
           // Adds a listener to detect new windows.
           ExtensionSupport.registerWindowListener(EXTENSION_NAME, {
             chromeURLs: ["chrome://messenger/content/messenger.xul",
@@ -45,28 +48,43 @@ var CharsetMenu = class extends ExtensionCommon.ExtensionAPI {
 function paint(win) {
   win.MailSetCharacterSetNew = (aEvent) => {
     if (aEvent.target.hasAttribute("charset")) {
-      win.msgWindow.mailCharacterSet = aEvent.target.getAttribute("charset");
       win.msgWindow.charsetOverride = true;
       win.gMessageDisplay.keyForCharsetOverride =
         "messageKey" in win.gMessageDisplay.displayedMessage
           ? win.gMessageDisplay.displayedMessage.messageKey
           : null;
-      win.messenger.setDocumentCharset(win.msgWindow.mailCharacterSet);
-      win.setTimeout(() => {
-        let subject = win.document.getElementById("expandedsubjectBox").textContent;
-        let subjectUTF8 = String.fromCharCode.apply(undefined, new TextEncoder("UTF-8").encode(subject));
-        const { selectedMessage, tree, selectedMessageUris } = win.gFolderDisplay;
-        console.log(selectedMessage, tree, subject, subjectUTF8);
-        if (selectedMessage) {
-          selectedMessage.subject = subjectUTF8;
-          if (tree && tree.view && tree.view.selection && tree.view.selection.currentIndex >= 0) {
-            tree.invalidateRow(tree.view.selection.currentIndex);
+      let canSetCharset = false;
+      try {
+        let charset = aEvent.target.getAttribute("charset");
+        // From TB 91.3 or TB 94 beta the following call will fail since the API was removed.
+        win.messenger.setDocumentCharset(charset);
+        win.msgWindow.mailCharacterSet = charset;
+        canSetCharset = true;
+      } catch (ex) {
+        win.messenger.forceDetectDocumentCharset();
+      }
+
+      // messenger.setDocumentCharset() also fixes the subject in the header pane,
+      // so we can fix the tree using it. 100ms should be good enough to redisplay the message
+      // so get can get the fixed subject. Hacky, ...
+      if (canSetCharset && Services.prefs.getBoolPref("extensions.CharsetMenu.fixThreadTree", false)) {
+        win.setTimeout(() => {
+          let subject = win.document.getElementById("expandedsubjectBox").textContent;
+          let subjectUTF8 = String.fromCharCode.apply(undefined, new TextEncoder("UTF-8").encode(subject));
+          const { selectedMessage, tree, selectedMessageUris } = win.gFolderDisplay;
+          // console.log(selectedMessage, tree, subject, subjectUTF8);
+          if (selectedMessage) {
+            selectedMessage.subject = subjectUTF8;
+            if (tree && tree.view && tree.view.selection && tree.view.selection.currentIndex >= 0) {
+              tree.invalidateRow(tree.view.selection.currentIndex);
+            }
           }
-        }
-      }, 100);
+        }, 100);
+      }
     }
   };
   win.UpdateCharsetMenuNew = (aCharset, aNode) => {
+    // console.log("UpdateCharsetMenuNew", aCharset);
     if (aCharset.toUpperCase() == "ISO-8859-8-I") aCharset = "windows-1255";
     else if (aCharset.toLowerCase() == "gb18030") aCharset = "GBK";
     let menuitem = aNode
@@ -82,7 +100,7 @@ function paint(win) {
     <menu id="charsetMenuNew"
           onpopupshowing="UpdateCharsetMenuNew(msgWindow.mailCharacterSet, this);"
           oncommand="MailSetCharacterSetNew(event);"
-          label="Text Encoding New">
+          label="Text Encoding">
     <menupopup id="charsetPopupNew">
     <menuitem type="radio" charset="UTF-8" label="Unicode (UTF-8)"></menuitem>
     <menuitem type="radio" charset="windows-1252" label="Western (windows-1252)"></menuitem>
