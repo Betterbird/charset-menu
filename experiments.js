@@ -82,6 +82,12 @@ function paint(win) {
     }
   };
   win.UpdateCharsetMenuNew = (aCharset, aNode) => {
+    if (!("setDocumentCharset" in win.messenger)) {
+      let menu = win.document.getElementById("charsetMenuNew");
+      win.document.querySelectorAll("menuitem").forEach((e) => {
+        e.setAttribute("disabled", "true");
+      });
+    }
     // console.log("UpdateCharsetMenuNew", aCharset);
     if (aCharset.toUpperCase() == "ISO-8859-8-I") aCharset = "windows-1255";
     else if (aCharset.toLowerCase() == "gb18030") aCharset = "GBK";
@@ -93,8 +99,7 @@ function paint(win) {
     }
   };
 
-  /* eslint-disable max-len */
-  let xulSrc = `
+  let xul = win.MozXULElement.parseXULToFragment(`
     <menu id="charsetMenuNew"
           onpopupshowing="UpdateCharsetMenuNew(msgWindow.mailCharacterSet, this);"
           oncommand="MailSetCharacterSetNew(event);"
@@ -137,13 +142,7 @@ function paint(win) {
     <menuitem type="radio" charset="windows-1258" label="Vietnamese (windows-1258)"></menuitem>
     </menupopup>
     </menu>
-  `;
-  if ("forceDetectDocumentCharset" in win.messenger) {
-    // eslint-disable-next-line quotes
-    xulSrc = xulSrc.replace(/type="radio"/g, 'type="radio" disabled="true"');
-  }
-  /* eslint-enable max-len */
-  let xul = win.MozXULElement.parseXULToFragment(xulSrc);
+  `);
   let old = win.document.getElementById("charsetMenu");
   if (!old) old = win.document.getElementById("repair-text-encoding");  // TB 91 item.
   old.parentNode.insertBefore(xul, old.nextSibling);
