@@ -84,7 +84,7 @@ function paint(win) {
   win.UpdateCharsetMenuNew = (aCharset, aNode) => {
     if (!("setDocumentCharset" in win.messenger)) {
       let menu = win.document.getElementById("charsetMenuNew");
-      win.document.querySelectorAll("menuitem").forEach((e) => {
+      menu.querySelectorAll("menuitem").forEach((e) => {
         e.setAttribute("disabled", "true");
       });
     }
