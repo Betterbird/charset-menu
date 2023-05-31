@@ -5,10 +5,11 @@
 var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
 var { ExtensionSupport } = ChromeUtils.import("resource:///modules/ExtensionSupport.jsm");
 var { ExtensionParent } = ChromeUtils.import("resource://gre/modules/ExtensionParent.jsm");
+var { AppConstants } = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
+var appVersion = parseInt(AppConstants.MOZ_APP_VERSION, 10);
 
 const EXTENSION_NAME = "CharsetMenu@jorgk.com";
 var extension = ExtensionParent.GlobalManager.getExtension(EXTENSION_NAME);
-Cu.importGlobalProperties(["TextEncoder"]); // Don't ask :-(
 
 // Implements the functions defined in the experiments section of schema.json.
 var CharsetMenu = class extends ExtensionCommon.ExtensionAPI {
@@ -29,13 +30,10 @@ var CharsetMenu = class extends ExtensionCommon.ExtensionAPI {
     return {
       CharsetMenu: {
         addWindowListener(dummy) {
-          let defaultsBranch = Services.prefs.getDefaultBranch("extensions.CharsetMenu.");
-          defaultsBranch.setBoolPref("fixThreadTree", false);
-
           // Adds a listener to detect new windows.
           ExtensionSupport.registerWindowListener(EXTENSION_NAME, {
-            chromeURLs: ["chrome://messenger/content/messenger.xul",
-              "chrome://messenger/content/messenger.xhtml"],
+            chromeURLs: ["chrome://messenger/content/messenger.xhtml",
+              "chrome://messenger/content/messageWindow.xhtml"],
             onLoadWindow: paint,
             onUnloadWindow: unpaint,
           });
@@ -45,110 +43,81 @@ var CharsetMenu = class extends ExtensionCommon.ExtensionAPI {
   }
 };
 
+function setTooltip(win, elName, charset) {
+  let charsetText = charset;
+  if (charset.toUpperCase() == "ISO-8859-8-I") charset = "windows-1255";
+  else if (charset.toLowerCase() == "gb18030") charset = "GBK";
+
+  if (charset == "UTF-8") charsetText = "Unicode (UTF-8)";
+  else if (charset == "windows-1252") charsetText = "Western (windows-1252)";
+  else if (charset == "windows-1256") charsetText = "Arabic (windows-1256)";
+  else if (charset == "ISO-8859-6") charsetText = "Arabic (ISO-8859-6)";
+  else if (charset == "windows-1257") charsetText = "Baltic (windows-1257)";
+  else if (charset == "ISO-8859-4") charsetText = "Baltic (ISO-8859-4)";
+  else if (charset == "windows-1250") charsetText = "Central European (windows-1250)";
+  else if (charset == "ISO-8859-2") charsetText = "Central European (ISO-8859-2)";
+  else if (charset == "GBK") charsetText = "Chinese, Simplified (GBK)";
+  else if (charset == "Big5") charsetText = "Chinese, Traditional (Big5)";
+  else if (charset == "windows-1251") charsetText = "Cyrillic (windows-1251)";
+  else if (charset == "ISO-8859-5") charsetText = "Cyrillic (ISO-8859-5)";
+  else if (charset == "KOI8-R") charsetText = "Cyrillic (KOI8-R)";
+  else if (charset == "KOI8-U") charsetText = "Cyrillic (KOI8-U)";
+  else if (charset == "IBM866") charsetText = "Cyrillic (IBM866)";
+  else if (charset == "windows-1253") charsetText = "Greek (windows-1253)";
+  else if (charset == "ISO-8859-7") charsetText = "Greek (ISO-8859-7)";
+  else if (charset == "windows-1255") charsetText = "Hebrew (windows-1255)";
+  else if (charset == "ISO-8859-8") charsetText = "Hebrew (ISO-8859-8)";
+  else if (charset == "Shift_JIS") charsetText = "Japanese (Shift_JIS)";
+  else if (charset == "EUC-JP") charsetText = "Japanese (EUC-JP)";
+  else if (charset == "ISO-2022-JP") charsetText = "Japanese (ISO-2022-JP)";
+  else if (charset == "EUC-KR") charsetText = "Korean (EUC-KR)";
+  else if (charset == "windows-874") charsetText = "Thai (windows-874)";
+  else if (charset == "windows-1254") charsetText = "Turkish (windows-1254)";
+  else if (charset == "windows-1258") charsetText = "Vietnamese (windows-1258)";
+
+  if (charsetText) {
+    let repairMenu = win.document.getElementById(elName);
+    repairMenu.setAttribute("tooltiptext", charsetText);
+  }
+}
+
+function fixMessageMenu(message) {
+  let tb_onShowOtherActionsPopup = message.onShowOtherActionsPopup;
+  message.onShowOtherActionsPopup = () => {
+    setTooltip(message, "charsetRepairMenuitem", message.currentCharacterSet);
+    tb_onShowOtherActionsPopup();
+  };
+}
+
 function paint(win) {
-  win.MailSetCharacterSetNew = (aEvent) => {
-    if (aEvent.target.hasAttribute("charset")) {
-      win.msgWindow.charsetOverride = true;
-      win.gMessageDisplay.keyForCharsetOverride =
-        "messageKey" in win.gMessageDisplay.displayedMessage
-          ? win.gMessageDisplay.displayedMessage.messageKey
-          : null;
-      let canSetCharset = false;
-      if ("setDocumentCharset" in win.messenger) {
-        let charset = aEvent.target.getAttribute("charset");
-        // From TB 91.3 or TB 94 beta the following call will fail since the API was removed.
-        win.messenger.setDocumentCharset(charset);
-        win.msgWindow.mailCharacterSet = charset;
-        canSetCharset = true;
-      }
-
-      // messenger.setDocumentCharset() also fixes the subject in the header pane,
-      // so we can fix the tree using it. 100ms should be good enough to redisplay the message
-      // so get can get the fixed subject. Hacky, ...
-      if (canSetCharset && Services.prefs.getBoolPref("extensions.CharsetMenu.fixThreadTree", false)) {
-        win.setTimeout(() => {
-          let subject = win.document.getElementById("expandedsubjectBox").textContent;
-          let subjectUTF8 = String.fromCharCode.apply(undefined, new TextEncoder("UTF-8").encode(subject));
-          const { selectedMessage, tree, selectedMessageUris } = win.gFolderDisplay;
-          // console.log(selectedMessage, tree, subject, subjectUTF8);
-          if (selectedMessage) {
-            selectedMessage.subject = subjectUTF8;
-            if (tree && tree.view && tree.view.selection && tree.view.selection.currentIndex >= 0) {
-              tree.invalidateRow(tree.view.selection.currentIndex);
-            }
-          }
-        }, 100);
-      }
+  if (appVersion <= 111) {
+    win.tb_view_init = win.view_init;
+    win.view_init = (event) => {
+      let charset = win.msgWindow.mailCharacterSet;
+      setTooltip(win, "repair-text-encoding", charset);
+      win.tb_view_init(event);
+    };
+  } else {
+    let tabmail = win.document.getElementById("tabmail");
+    if (!tabmail) {
+      // Stand-alone window.
+      fixMessageMenu(win.document.getElementById("messageBrowser").contentWindow);
+      return;
     }
-  };
-  win.UpdateCharsetMenuNew = (aCharset, aNode) => {
-    if (!("setDocumentCharset" in win.messenger)) {
-      let menu = win.document.getElementById("charsetMenuNew");
-      menu.querySelectorAll("menuitem").forEach((e) => {
-        e.setAttribute("disabled", "true");
-      });
-    }
-    // console.log("UpdateCharsetMenuNew", aCharset);
-    if (aCharset.toUpperCase() == "ISO-8859-8-I") aCharset = "windows-1255";
-    else if (aCharset.toLowerCase() == "gb18030") aCharset = "GBK";
-    let menuitem = aNode
-      .getElementsByAttribute("charset", aCharset)
-      .item(0);
-    if (menuitem) {
-      menuitem.setAttribute("checked", "true");
-    }
-  };
 
-  let xul = win.MozXULElement.parseXULToFragment(`
-    <menu id="charsetMenuNew"
-          onpopupshowing="UpdateCharsetMenuNew(msgWindow.mailCharacterSet, this);"
-          oncommand="MailSetCharacterSetNew(event);"
-          label="Text Encoding">
-    <menupopup id="charsetPopupNew">
-    <menuitem type="radio" charset="UTF-8" label="Unicode (UTF-8)"></menuitem>
-    <menuitem type="radio" charset="windows-1252" label="Western (windows-1252)"></menuitem>
-    <menuseparator/>
-    <menuitem type="radio" charset="windows-1256" label="Arabic (windows-1256)"></menuitem>
-    <menuitem type="radio" charset="ISO-8859-6" label="Arabic (ISO-8859-6)"></menuitem>
-
-    <menuitem type="radio" charset="windows-1257" label="Baltic (windows-1257)"></menuitem>
-    <menuitem type="radio" charset="ISO-8859-4" label="Baltic (ISO-8859-4)"></menuitem>
-
-    <menuitem type="radio" charset="windows-1250" label="Central European (windows-1250)"></menuitem>
-    <menuitem type="radio" charset="ISO-8859-2" label="Central European (ISO-8859-2)"></menuitem>
-
-    <menuitem type="radio" charset="GBK" label="Chinese, Simplified (GBK)"></menuitem>
-    <menuitem type="radio" charset="Big5" label="Chinese, Traditional (Big5)"></menuitem>
-
-    <menuitem type="radio" charset="windows-1251" label="Cyrillic (windows-1251)"></menuitem>
-    <menuitem type="radio" charset="ISO-8859-5" label="Cyrillic (ISO-8859-5)"></menuitem>
-    <menuitem type="radio" charset="KOI8-R" label="Cyrillic (KOI8-R)"></menuitem>
-    <menuitem type="radio" charset="KOI8-U" label="Cyrillic (KOI8-U)"></menuitem>
-    <menuitem type="radio" charset="IBM866" label="Cyrillic (IBM866)"></menuitem>
-
-    <menuitem type="radio" charset="windows-1253" label="Greek (windows-1253)"></menuitem>
-    <menuitem type="radio" charset="ISO-8859-7" label="Greek (ISO-8859-7)"></menuitem>
-
-    <menuitem type="radio" charset="windows-1255" label="Hebrew (windows-1255)"></menuitem>
-    <menuitem type="radio" charset="ISO-8859-8" label="Hebrew (ISO-8859-8)"></menuitem>
-
-    <menuitem type="radio" charset="Shift_JIS" label="Japanese (Shift_JIS)"></menuitem>
-    <menuitem type="radio" charset="EUC-JP" label="Japanese (EUC-JP)"></menuitem>
-    <menuitem type="radio" charset="ISO-2022-JP" label="Japanese (ISO-2022-JP)"></menuitem>
-
-    <menuitem type="radio" charset="EUC-KR" label="Korean (EUC-KR)"></menuitem>
-    <menuitem type="radio" charset="windows-874" label="Thai (windows-874)"></menuitem>
-    <menuitem type="radio" charset="windows-1254" label="Turkish (windows-1254)"></menuitem>
-    <menuitem type="radio" charset="windows-1258" label="Vietnamese (windows-1258)"></menuitem>
-    </menupopup>
-    </menu>
-  `);
-  let old = win.document.getElementById("charsetMenu");
-  if (!old) old = win.document.getElementById("repair-text-encoding");  // TB 91 item.
-  old.parentNode.insertBefore(xul, old.nextSibling);
+    // The menu will only get fixed in the message tabs loaded after add-on
+    // startup, so not on the currently open tabs when the add-on is first
+    // installed. Let's not worry about this for now.
+    tabmail.addEventListener("aboutMessageLoaded", (event) => {
+      fixMessageMenu(event.target);
+    });
+  }
 }
 
 function unpaint(win) {
-  let menu = win.document.getElementById("charsetMenuNew");
-  if (menu) menu.remove();
+  // We won't clean-up about:message in version 111 and beyond
+  // since we get a new window/document frequently.
+  if (appVersion <= 111) {
+    win.view_init = win.tb_view_init;
+  }
 }
