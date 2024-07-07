@@ -2,10 +2,9 @@
 
 /* global ExtensionCommon */
 
-var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
-var { ExtensionSupport } = ChromeUtils.import("resource:///modules/ExtensionSupport.jsm");
-var { ExtensionParent } = ChromeUtils.import("resource://gre/modules/ExtensionParent.jsm");
-var { AppConstants } = ChromeUtils.import("resource://gre/modules/AppConstants.jsm");
+var { ExtensionSupport } = ChromeUtils.importESModule("resource:///modules/ExtensionSupport.sys.mjs");
+var { ExtensionParent } = ChromeUtils.importESModule("resource://gre/modules/ExtensionParent.sys.mjs");
+var { AppConstants } = ChromeUtils.importESModule("resource://gre/modules/AppConstants.sys.mjs");
 var appVersion = parseInt(AppConstants.MOZ_APP_VERSION, 10);
 
 const EXTENSION_NAME = "CharsetMenu@jorgk.com";
