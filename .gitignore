@@ -1,0 +1,5 @@
+syntax: glob
+
+*.xpi
+ATN listing
+Old patches
