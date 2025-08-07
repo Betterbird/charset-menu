@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "Charset Menu",
   "description": "Show charset being used as tooltip on Repair Text Encoding menu item",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "author": "The Betterbird Project, Jörg Knobloch",
   "homepage_url": "https://github.com/Betterbird/charset-menu",
   "applications": {

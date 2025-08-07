@@ -5,7 +5,6 @@
 var { ExtensionSupport } = ChromeUtils.importESModule("resource:///modules/ExtensionSupport.sys.mjs");
 var { ExtensionParent } = ChromeUtils.importESModule("resource://gre/modules/ExtensionParent.sys.mjs");
 var { AppConstants } = ChromeUtils.importESModule("resource://gre/modules/AppConstants.sys.mjs");
-var appVersion = parseInt(AppConstants.MOZ_APP_VERSION, 10);
 
 const EXTENSION_NAME = "CharsetMenu@jorgk.com";
 var extension = ExtensionParent.GlobalManager.getExtension(EXTENSION_NAME);
@@ -89,34 +88,22 @@ function fixMessageMenu(message) {
 }
 
 function paint(win) {
-  if (appVersion <= 111) {
-    win.tb_view_init = win.view_init;
-    win.view_init = (event) => {
-      let charset = win.msgWindow.mailCharacterSet;
-      setTooltip(win, "repair-text-encoding", charset);
-      win.tb_view_init(event);
-    };
-  } else {
-    let tabmail = win.document.getElementById("tabmail");
-    if (!tabmail) {
-      // Stand-alone window.
-      fixMessageMenu(win.document.getElementById("messageBrowser").contentWindow);
-      return;
-    }
-
-    // The menu will only get fixed in the message tabs loaded after add-on
-    // startup, so not on the currently open tabs when the add-on is first
-    // installed. Let's not worry about this for now.
-    tabmail.addEventListener("aboutMessageLoaded", (event) => {
-      fixMessageMenu(event.target);
-    });
+  let tabmail = win.document.getElementById("tabmail");
+  if (!tabmail) {
+    // Stand-alone window.
+    fixMessageMenu(win.document.getElementById("messageBrowser").contentWindow);
+    return;
   }
+
+  // The menu will only get fixed in the message tabs loaded after add-on
+  // startup, so not on the currently open tabs when the add-on is first
+  // installed. Let's not worry about this for now.
+  tabmail.addEventListener("aboutMessageLoaded", (event) => {
+    fixMessageMenu(event.target);
+  });
 }
 
 function unpaint(win) {
   // We won't clean-up about:message in version 111 and beyond
   // since we get a new window/document frequently.
-  if (appVersion <= 111) {
-    win.view_init = win.tb_view_init;
-  }
 }
